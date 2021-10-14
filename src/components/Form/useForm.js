@@ -1,70 +1,37 @@
-import {useState, useEffect, useRef, } from "react";
-
-const fieldStatusSetter = (isValid, errorMessage) => ({
-    isValid,
-    errorMessage
-});
+import {useState, useEffect, useRef, useReducer, } from "react";
+import { reducer, initialState } from './reducer/formReducer'
+import { Actions } from './reducer/actions';
 
 function isEmpty(obj) {
     return Object.keys(obj).length === 0;
 }
 
 export const useForm = (options = null) => {
-    const [fieldValues, setFieldValues] = useState({});
-    const [errors, setErrors] = useState({});
-    const [onChangeField, setonChangeField] = useState(null);
-    const [onValidAll, setOnValidAll] = useState(false);
-    const [allFields, setAllFields] = useState(null);
-    const [disableSubmitForm, setDisableSubmitForm] = useState(false);
-    const [success, setSuccess] = useState({});
+    const [state, dispatch] = useReducer(reducer, initialState);
+    const { errors, onValidAll, onChangeField, allFields, isSubmitFormDisabled, success, fieldValues } = state;
     const formRef = useRef();
 
     useEffect(() => {
-        if (!isEmpty(errors)) {
-            const data = checkAllFields();
-            if (data) {
-                setOnValidAll(true);
-                setDisableSubmitForm(false);
-            } else {
-                setDisableSubmitForm(true);
-            }
-        } else {
-            setDisableSubmitForm(false);
-        }
+        dispatch({ type: Actions.DISABLE_SUBMIT_BUTTON });
     }, [errors]);
 
     useEffect(() => {
         if (options) {
-            setAllFields(Object.keys(options.validations));
+            dispatch({ type: Actions.ALL_FIELDS, payload: Object.keys(options.validations) })
         }
     }, []);
 
     useEffect(() => {
         if (onValidAll) {
-            let validTest = {};
-            const validationRules = options.validations;
-            for (const key in validationRules) {
-                const res = validate({ key, fieldValues, options });
-                if (!isEmpty(res)) {
-                    validTest[key] = validate({ key, fieldValues, options });
-                }
-            }
-            setErrors(validTest);
+            const validResults = validateAllFields(options, fieldValues);
+            dispatch({ type: Actions.ERRORS, payload: validResults });
         }
     }, [onValidAll]);
 
     useEffect(() => {
-        if (onChangeField) {
-            const validationResult = validate({ key: onChangeField, fieldValues, options });
-            if (!isEmpty(validationResult)) {
-                setSuccessByValue(onChangeField, false);
-            } else {
-                setSuccessByValue(onChangeField, true);
-            }
-            if (errors[onChangeField]) {
-                clearError(onChangeField);
-            }
-            setonChangeField(null);
+        if (onChangeField && errors[onChangeField]) {
+            clearError(onChangeField);
+            dispatch({ type: Actions.ON_CHANGE_FIELD, payload: null })
         }
     }, [onChangeField, fieldValues]);
 
@@ -81,29 +48,12 @@ export const useForm = (options = null) => {
         if (errors[fieldId] && !errors[fieldId].errorMessage) return;
         // eslint-disable-next-line no-unused-vars
         const { [fieldId]: currentElement, ...clearedErrors } = errors;
-        setErrors({ ...clearedErrors });
-        setSuccessByValue(fieldId, true);
-    }
-
-    function setDataByValue(id, value) {
-        setFieldValues({
-            ...fieldValues,
-            [id]: value
-        });
-    }
-
-    function setSuccessByValue(id, value) {
-        setSuccess({
-            ...success,
-            [id]: value
-        });
+        dispatch({ type: Actions.ERRORS, payload: { ...clearedErrors } });
+        dispatch({ type: Actions.SUCCESS, payload: { [fieldId]: true } }) // fix me on success
     }
 
     function handleInputChange(e) {
-        if(!disableSubmitForm) {
-            setDisableSubmitForm(true);
-        }
-        setDataByValue(e.target.id, e.target.value);
+        dispatch({ type: Actions.FIELD_VALUES, payload: { ...fieldValues, [e.target.id]: e.target.value } })
         if (errors[e.target.id]) {
             clearError(e.target.id);
         }
@@ -111,33 +61,30 @@ export const useForm = (options = null) => {
 
     function handleInputBlur(e) {
         const validationResult = validate({ key: e.target.id, fieldValues, options });
-        const errorField = !isEmpty(validationResult) ? { [e.target.id]: validationResult } : {};
         if (isEmpty(validationResult)) {
-            setSuccessByValue(e.target.id, true);
+            dispatch({ type: Actions.SUCCESS, payload: { [e.target.id]: true } })
         }
-        setErrors((prevState) => {
-            return { ...prevState, ...errorField };
-        });
+        dispatch({ type: Actions.ERRORS, payload: { ...errors, ...validationResult } });
     }
 
     function handleCheckboxChange(e) {
-        setDataByValue(e.target.id, e.target.checked);
-        setonChangeField(e.target.id);
+        dispatch({ type: Actions.FIELD_VALUES, payload: { ...fieldValues, [e.target.id]: e.target.checked } })
+        dispatch({ type: Actions.ON_CHANGE_FIELD, payload: e.target.id })
     }
 
     function handleSelectChange(e) {
-        setDataByValue(e.target.id, e.target.value);
-        setonChangeField(e.target.id);
+        dispatch({ type: Actions.FIELD_VALUES, payload: { ...fieldValues, [e.target.id]: e.target.value } })
+        dispatch({ type: Actions.ON_CHANGE_FIELD, payload: e.target.id })
     }
 
     const handleSubmit = (e) => {
         e.preventDefault();
         const data = checkAllFields();
-        if (!disableSubmitForm && data) {
+        if (!isSubmitFormDisabled && data) {
             console.log('sending data');
             return;
         }
-        setOnValidAll(true);
+        dispatch({ type: Actions.ON_VALID_ALL })
     };
 
     return {
@@ -150,7 +97,7 @@ export const useForm = (options = null) => {
         errors,
         onValidAll,
         formRef,
-        disableSubmitForm,
+        isSubmitFormDisabled,
         success
     };
 };
@@ -162,18 +109,28 @@ export const validate = ({ key, fieldValues, options }) => {
     if (!currentFieldState[key]) {
         const isRequired = rulesToValidate.find((el) => el.name === 'required');
         if (isRequired) {
-            validationResult = fieldStatusSetter(false, isRequired.message);
-            validationResult = { errorMessage: isRequired.message };
+            validationResult = { [key]: { errorMessage: isRequired.message } };
         }
     } else {
         const validErr = rulesToValidate.find((item) => !item.validate(currentFieldState[key]));
         if (validErr) {
-            // const errorMessage = fieldStatusSetter(false, validErr.message);
-            const errorMessage = validationResult = { errorMessage: validErr.message };
-            validationResult = { ...errorMessage };
-            return validationResult;
+            validationResult = { [key]: { errorMessage: validErr.message } };
+            // return validationResult;
         }
     }
-    console.log(validationResult);
-    return validationResult ? validationResult : {};
+    return validationResult[key] ? validationResult : {};
 };
+
+export function validateAllFields(options, fieldValues) {
+    const values = { ...fieldValues };
+    let validResults = {};
+    const validationRules = options.validations;
+    for (const key in validationRules) {
+        const res = validate({ key, fieldValues: values, options });
+        if (!isEmpty(res)) {
+            validResults = { ...validResults, ...res };
+        }
+    }
+
+    return validResults;
+}

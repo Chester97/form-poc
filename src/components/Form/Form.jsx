@@ -17,7 +17,7 @@ export const Form = () => {
         errors,
         fieldValues,
         formRef,
-        disableSubmitForm,
+        isSubmitFormDisabled,
         success
     } = useForm(validationRules);
 
@@ -81,7 +81,7 @@ export const Form = () => {
             {!errors.termsAndConditions?.isValid && (
                 <Error message={errors.termsAndConditions?.errorMessage} />
             )}
-            <button type="submit" className="submit" disabled={disableSubmitForm}>
+            <button type="submit" className="submit" disabled={isSubmitFormDisabled}>
                 Submit
             </button>
         </form>
