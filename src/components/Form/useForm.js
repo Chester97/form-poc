@@ -1,6 +1,15 @@
-import {useState, useEffect, useRef, useReducer, } from "react";
+import {useEffect, useRef, useReducer, } from "react";
 import { reducer, initialState } from './reducer/formReducer'
-import { Actions } from './reducer/actions';
+import {
+    setFieldValue,
+    setError,
+    setCurrentOnChangeField,
+    setSubmitDisable,
+    setAllFields,
+    setSuccess,
+    setOnValidAll
+} from './reducer/actions';
+
 
 function isEmpty(obj) {
     return Object.keys(obj).length === 0;
@@ -8,32 +17,32 @@ function isEmpty(obj) {
 
 export const useForm = (options = null) => {
     const [state, dispatch] = useReducer(reducer, initialState);
-    const { errors, onValidAll, onChangeField, allFields, isSubmitFormDisabled, success, fieldValues } = state;
+    const { errors, onValidAll, onChangeCurrentField, allFields, isSubmitFormDisabled, success, fieldValues } = state;
     const formRef = useRef();
 
     useEffect(() => {
-        dispatch({ type: Actions.DISABLE_SUBMIT_BUTTON });
+        setSubmitDisable(dispatch);
     }, [errors]);
 
     useEffect(() => {
         if (options) {
-            dispatch({ type: Actions.ALL_FIELDS, payload: Object.keys(options.validations) })
+            setAllFields(dispatch, Object.keys(options.validations) );
         }
     }, []);
 
     useEffect(() => {
         if (onValidAll) {
             const validResults = validateAllFields(options, fieldValues);
-            dispatch({ type: Actions.ERRORS, payload: validResults });
+            setError(dispatch, validResults);
         }
     }, [onValidAll]);
 
     useEffect(() => {
-        if (onChangeField && errors[onChangeField]) {
-            clearError(onChangeField);
-            dispatch({ type: Actions.ON_CHANGE_FIELD, payload: null })
+        if (onChangeCurrentField && errors[onChangeCurrentField]) {
+            clearError(onChangeCurrentField);
+            setCurrentOnChangeField(dispatch, null);
         }
-    }, [onChangeField, fieldValues]);
+    }, [onChangeCurrentField, fieldValues]);
 
     function checkAllFields() {
         if (isEmpty(fieldValues)) return false;
@@ -48,12 +57,12 @@ export const useForm = (options = null) => {
         if (errors[fieldId] && !errors[fieldId].errorMessage) return;
         // eslint-disable-next-line no-unused-vars
         const { [fieldId]: currentElement, ...clearedErrors } = errors;
-        dispatch({ type: Actions.ERRORS, payload: { ...clearedErrors } });
-        dispatch({ type: Actions.SUCCESS, payload: { [fieldId]: true } }) // fix me on success
+        setError(dispatch, {...clearedErrors});
+        setSuccess(dispatch, { [fieldId]: true } ); // fix me on success
     }
 
     function handleInputChange(e) {
-        dispatch({ type: Actions.FIELD_VALUES, payload: { ...fieldValues, [e.target.id]: e.target.value } })
+        setFieldValue(dispatch, { [e.target.id]: e.target.value });
         if (errors[e.target.id]) {
             clearError(e.target.id);
         }
@@ -62,29 +71,36 @@ export const useForm = (options = null) => {
     function handleInputBlur(e) {
         const validationResult = validate({ key: e.target.id, fieldValues, options });
         if (isEmpty(validationResult)) {
-            dispatch({ type: Actions.SUCCESS, payload: { [e.target.id]: true } })
+            setSuccess(dispatch, { [e.target.id]: true } );
         }
-        dispatch({ type: Actions.ERRORS, payload: { ...errors, ...validationResult } });
+        setError(dispatch, { ...errors, ...validationResult });
     }
 
     function handleCheckboxChange(e) {
-        dispatch({ type: Actions.FIELD_VALUES, payload: { ...fieldValues, [e.target.id]: e.target.checked } })
-        dispatch({ type: Actions.ON_CHANGE_FIELD, payload: e.target.id })
+        setFieldValue(dispatch, { ...fieldValues, [e.target.id]: e.target.checked })
+        setCurrentOnChangeField(dispatch, e.target.id);
     }
 
     function handleSelectChange(e) {
-        dispatch({ type: Actions.FIELD_VALUES, payload: { ...fieldValues, [e.target.id]: e.target.value } })
-        dispatch({ type: Actions.ON_CHANGE_FIELD, payload: e.target.id })
+        setFieldValue(dispatch, { ...fieldValues, [e.target.id]: e.target.value })
+        setCurrentOnChangeField(dispatch, e.target.id);
     }
+
+    /*
+    *
+    * ADD VALIDAITON ON HANDLE SUBMIT? PROBLEM WITH ONCHANGE FIELDS
+    *
+    * */
 
     const handleSubmit = (e) => {
         e.preventDefault();
         const data = checkAllFields();
+        console.log("data: ", data);
         if (!isSubmitFormDisabled && data) {
             console.log('sending data');
             return;
         }
-        dispatch({ type: Actions.ON_VALID_ALL })
+        setOnValidAll(dispatch);
     };
 
     return {
