@@ -15,13 +15,19 @@ function isEmpty(obj) {
     return Object.keys(obj).length === 0;
 }
 
-export const useForm = (options = null) => {
+export const useForm = (options = null, ref1, ref2, ref10) => {
     const [state, dispatch] = useReducer(reducer, initialState);
     const { errors, onValidAll, onChangeCurrentField, allFields, isSubmitFormDisabled, success, fieldValues } = state;
     const formRef = useRef();
 
     useEffect(() => {
         setSubmitDisable(dispatch);
+        const errors2 = Object.keys(errors).map((field) => {
+            const { [field]: test, ...rest } = success
+            console.log("TEST: ", test);
+            console.log("REST: ", rest);
+
+        });
     }, [errors]);
 
     useEffect(() => {
@@ -38,11 +44,15 @@ export const useForm = (options = null) => {
     }, [onValidAll]);
 
     useEffect(() => {
-        if (onChangeCurrentField && errors[onChangeCurrentField]) {
-            clearError(onChangeCurrentField);
-            setCurrentOnChangeField(dispatch, null);
+        if(onChangeCurrentField) {
+            const onChangeField = validate({key: onChangeCurrentField, fieldValues, options});
+            setError(dispatch, { ...errors, ...onChangeField });
         }
-    }, [onChangeCurrentField, fieldValues]);
+        if (errors[onChangeCurrentField]) {
+            clearError(onChangeCurrentField);
+        }
+        setCurrentOnChangeField(dispatch, null)
+    }, [onChangeCurrentField]);
 
     function checkAllFields() {
         if (isEmpty(fieldValues)) return false;
@@ -86,21 +96,15 @@ export const useForm = (options = null) => {
         setCurrentOnChangeField(dispatch, e.target.id);
     }
 
-    /*
-    *
-    * ADD VALIDAITON ON HANDLE SUBMIT? PROBLEM WITH ONCHANGE FIELDS
-    *
-    * */
-
     const handleSubmit = (e) => {
         e.preventDefault();
         const data = checkAllFields();
-        console.log("data: ", data);
         if (!isSubmitFormDisabled && data) {
             console.log('sending data');
             return;
         }
         setOnValidAll(dispatch);
+
     };
 
     return {
